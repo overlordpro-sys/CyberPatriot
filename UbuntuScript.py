@@ -46,35 +46,34 @@ def firewall_config():
 
 
 def dns_flush():
-    output = subprocess.check_output("/etc/init.d/dnsmasq restart", shell=True, text=True)
-    output += subprocess.check_output("/etc/init.d/ncsd -i hosts", shell=True, text=True)
-    output += subprocess.check_output("/etc/init.d/ncsd reload", shell=True, text=True)
-    output += subprocess.check_output("rndc flush", shell=True, text=True)
-    output += subprocess.check_output("free", shell=True, text=True)
-    output += subprocess.check_output("sync", shell=True, text=True)
-    output += subprocess.check_output("echo 3 > /proc/sys/vm/drop_caches", shell=True, text=True)
-    output += subprocess.check_output("free", shell=True, text=True)
-    output += subprocess.check_output("service xinetd reload", shell=True, text=True)
+    commands = ["/etc/init.d/dnsmasq restart", "/etc/init.d/ncsd -i hosts", "/etc/init.d/ncsd reload", "rndc flush",
+                "free", "sync", "echo 3 > /proc/sys/vm/drop_caches", "free", "service xinetd reload"]
+    dnsOutput = ""
+
+    for command in commands:
+        try:
+            dnsOutput += subprocess.check_output(command, shell=True, text=True)
+            dnsOutput += "\n"
+        except Exception as e:
+            dnsOutput += "\n---ERROR" + command + "---ERROR\n" + str(e) + "\n"
 
     with open('logs/dnsflush.log', 'w') as dnslog:
-        dnslog.write(output)
+        dnslog.write(dnsOutput)
 
 
 def scans():
+    commands = ["chkrootkit", "rkhunter -propupd", "rkhunter -c --enable all --disable none", "lynis update info",
+                "lynis audit system", "freshclam", "clamscan -r -i"]
+    scanOutput = ""
+    for command in commands:
+        try:
+            scanOutput += "\n------" + command + "------\n"
+            scanOutput += subprocess.check_output(command, shell=True, text=True)
+        except Exception as e:
+            scanOutput += "\n---ERROR" + command + "---ERROR\n" + str(e) + "\n"
+
     with open('logs/scans.log', 'w') as scanlog:
-        scanlog.write("\n------CHKROOTKIT------\n")
-        output = subprocess.check_output("chkrootkit", shell=True, text=True)
-        scanlog.write("\n------RKHUNTER------\n")
-        output += subprocess.check_output("rkhunter --propupd", shell=True, text=True)
-        output += subprocess.check_output("rkhunter --update", shell=True, text=True)
-        output += subprocess.check_output("rkhunter --c --enable all --disable none", shell=True, text=True)
-        scanlog.write("\n------LYNIS------\n")
-        output += subprocess.check_output("lynis update info", shell=True, text=True)
-        output += subprocess.check_output("lynis audit system", shell=True, text=True)
-        scanlog.write("\n------CLAMAV------\n")
-        output += subprocess.check_output("freshclam", shell=True, text=True)
-        output += subprocess.check_output("clamscan -r -i", shell=True, text=True)
-        scanlog.write(output)
+        scanlog.write(scanOutput)
 
 
 if not ask("Forensics answered? Updates and sources configured?"):
@@ -84,15 +83,14 @@ if not (os.path.isfile("users.txt") and os.path.isfile("admins.txt")):
     print("users.txt and admins.txt not found")
     sys.exit()
 
-try:
-    os.rename('/etc/foo', '/etc/bar')
-except IOError as e:
-    if e[0] == errno.EPERM:
-        sys.exit("This script must be run as root")
+if os.geteuid() != 0:
+    sys.exit("This script must be run as root")
 
 # create directories and copy log files to log directory
-os.mkdir("logs")
-os.mkdir("backups")
+if not os.path.exists("logs"):
+    os.mkdir("logs")
+if not os.path.exists("backups"):
+    os.mkdir("backups")
 logs = ["/var/log/auth.log", "/var/log/dkpg.log", "/var/log/messages", "/var/log/secure", "/var/log/apt/history.log",
         "/root/bash_history"]
 for log in logs:
@@ -102,13 +100,12 @@ for log in logs:
         print(log.rsplit("/", -1)[-1] + " not found")
 
 # install updates and packages
-os.system('apt-get update')
-os.system('apt-get upgrade -y')
-os.system('apt-get dist-upgrade -y')
-os.system('apt-get install ufw rkhunter tree debsums libpam-pwquality chkrootkit clamav lynis -y')
-os.system('apt-get autoremove -y')
-os.system('apt-get autoclean -y')
-os.system('apt-get check')
+subprocess.call('apt-get update', shell=True)
+subprocess.call('apt-get upgrade -y', shell=True)
+subprocess.call('apt-get install ufw rkhunter tree debsums libpam-pwquality chkrootkit clamav lynis -y', shell=True)
+subprocess.call('apt-get autoremove -y', shell=True)
+subprocess.call('apt-get autoclean -y', shell=True)
+subprocess.call('apt-get check', shell=True)
 
 # firewall stuff in background
 print("Configuring firewall...")
@@ -126,14 +123,14 @@ scans = Process(target=scans)
 scans.start()
 
 # lightdm stuff
-if os.isfile("/etc/lightdm/lightdm.conf"):
+if os.path.isfile("/etc/lightdm/lightdm.conf"):
     with open("/etc/lightdm/lightdm.conf", "a") as file:
         file.write("autologin-guest=false")
         file.write("allow-guest=false")
         file.write("greeter-hide-users=true")
 
 # lock root account
-os.system("passwd -l root")
+# subprocess.call("passwd -l root", shell=True)
 
 print("Changing password policies")
 # password policies
@@ -154,79 +151,79 @@ replace_line("/etc/pam.d/common-account", "account\t[success=1 new_authtok_reqd=
              "account\t[success=1 new_authtok_reqd=done default=ignore]\tpam_unix.so\naccount\trequired\t\t\tpam_tally2.so")
 
 # open passwd file and if users are not in users.txt or admins.txt, delete them
-os.mkdir("logs/user_changes.log")
-user_changes = open('logs/user_changes.log', 'a')
-with open("/etc/passwd") as passwd:
-    lines = passwd.readlines()
-    for line_number, line in enumerate(lines):
-        split = line.split(":")[0]
-        user = split[0]
-        uid = split[2]
-        gid = split[3]
-        if uid >= 1000:
-            if user not in open("users.txt").read() and user not in open("admins.txt").read():
-                if ask("User not in lists. Delete " + user + "?"):
-                    os.system("userdel -r " + user)
-                    print(user + " deleted")
-                    user_changes.write(user + " deleted")
-                else:
-                    print(user + " not deleted")
-            # remove user from sudo or adm group if they are in sudo or adm group in /etc/group
-            with open("/etc/group", "r") as groups:
-                if user in open("users.txt").read():
-                    for group in groups:
-                        if group.startswith("adm") and user in group:
-                            os.system("gpasswd -d " + user + " adm")
-                            print(user + " removed from adm group")
-                            user_changes.write(user + " removed from adm group")
-                        if group.startswith("sudo") and user in group:
-                            os.system("gpasswd -d " + user + " sudo")
-                            print(user + " removed from sudo group")
-                            user_changes.write(user + " removed from sudo group")
-                if user in open("admins.txt").read():
-                    for group in groups:
-                        if group.startswith("adm") and user not in group:
-                            os.system("gpasswd -a " + user + " adm")
-                            print(user + " added to adm group")
-                            user_changes.write(user + " added to adm group")
-                        if group.startswith("sudo") and user not in group:
-                            os.system("gpasswd -a " + user + " sudo")
-                            print(user + " added to sudo group")
-                            user_changes.write(user + " added to sudo group")
-        if user is not "root" and (uid == 0 or gid == 0):
-            lines[line_number] = "#" + line
-            print("commented out " + user + " because uid 0 and not root")
-            user_changes.write(user + " commented out because uid 0 and not root")
-            with open("/etc/passwd", "w") as passwdw:
-                passwdw.writelines(lines)
+
+with open('logs/user_changes.log', 'w') as user_changes:
+    with open("/etc/passwd") as passwd:
+        lines = passwd.readlines()
+        for line_number, line in enumerate(lines):
+            split = line.split(":")[0]
+            user = split[0]
+            uid = int(split[2])
+            gid = int(split[3])
+            if uid >= 1000:
+                if user not in open("users.txt").read() and user not in open("admins.txt").read():
+                    if ask("User not in lists. Delete " + user + "?"):
+                        subprocess.call("userdel -r " + user, shell=True)
+                        print(user + " deleted")
+                        user_changes.write(user + " deleted")
+                    else:
+                        print(user + " not deleted")
+                # remove user from sudo or adm group if they are in sudo or adm group in /etc/group
+                with open("/etc/group", "r") as groups:
+                    if user in open("users.txt").read():
+                        for group in groups:
+                            if group.startswith("adm") and user in group:
+                                subprocess.call("gpasswd -d " + user + " adm", shell=True)
+                                print(user + " removed from adm group")
+                                user_changes.write(user + " removed from adm group")
+                            if group.startswith("sudo") and user in group:
+                                subprocess.call("gpasswd -d " + user + " sudo", shell=True)
+                                print(user + " removed from sudo group")
+                                user_changes.write(user + " removed from sudo group")
+                    if user in open("admins.txt").read():
+                        for group in groups:
+                            if group.startswith("adm") and user not in group:
+                                subprocess.call("gpasswd -a " + user + " adm", shell=True)
+                                print(user + " added to adm group")
+                                user_changes.write(user + " added to adm group")
+                            if group.startswith("sudo") and user not in group:
+                                subprocess.call("gpasswd -a " + user + " sudo", shell=True)
+                                print(user + " added to sudo group")
+                                user_changes.write(user + " added to sudo group")
+            if user is not "root" and (uid == 0 or gid == 0):
+                lines[line_number] = "#" + line
+                print("commented out " + user + " because uid 0 and not root")
+                user_changes.write(user + " commented out because uid 0 and not root")
+                with open("/etc/passwd", "w") as passwdw:
+                    passwdw.writelines(lines)
 
 # prevent network root logon
-os.system("echo > /etc/securetty")
+subprocess.call("echo > /etc/securetty", shell=True)
 
 # change ownership of files
-os.system("chown root:root /etc/securetty")
-os.system("chmod 0600 /etc/securetty")
-os.system("chmod 644 /etc/crontab")
-os.system("chmod 640 /etc/ftpusers")
-os.system("chmod 440 /etc/inetd.conf")
-os.system("chmod 440 /etc/xinetd.conf")
-os.system(" 400 /etc/inetd.d")
-os.system("chmod 644 /etc/hosts.allow")
-os.system("chmod 440 /etc/sudoers")
-os.system("chmod 640 /etc/shadow")
-os.system("chown root:root /etc/shadow")
-os.system("chmod 644 /etc/passwd")
-os.system("chmod 644 /etc/group")
+subprocess.call("chown root:root /etc/securetty", shell=True)
+subprocess.call("chmod 0600 /etc/securetty", shell=True)
+subprocess.call("chmod 644 /etc/crontab", shell=True)
+subprocess.call("chmod 640 /etc/ftpusers", shell=True)
+subprocess.call("chmod 440 /etc/inetd.conf", shell=True)
+subprocess.call("chmod 440 /etc/xinetd.conf", shell=True)
+subprocess.call(" 400 /etc/inetd.d", shell=True)
+subprocess.call("chmod 644 /etc/hosts.allow", shell=True)
+subprocess.call("chmod 440 /etc/sudoers", shell=True)
+subprocess.call("chmod 640 /etc/shadow", shell=True)
+subprocess.call("chown root:root /etc/shadow", shell=True)
+subprocess.call("chmod 644 /etc/passwd", shell=True)
+subprocess.call("chmod 644 /etc/group", shell=True)
 
 # Remove unwanted aliases
-os.system("unalias -a")
-os.system("alias egrep='egrep --color=auto'")
-os.system("alias fgrep='fgrep --color=auto'")
-os.system("alias grep='grep --color=auto'")
-os.system("alias l='ls -CF'")
-os.system("alias la='ls -A'")
-os.system("alias ll='ls -alF'")
-os.system("alias ls='ls --color=auto'")
+subprocess.call("unalias -a", shell=True)
+subprocess.call("alias egrep='egrep --color=auto'", shell=True)
+subprocess.call("alias fgrep='fgrep --color=auto'", shell=True)
+subprocess.call("alias grep='grep --color=auto'", shell=True)
+subprocess.call("alias l='ls -CF'", shell=True)
+subprocess.call("alias la='ls -A'", shell=True)
+subprocess.call("alias ll='ls -alF'", shell=True)
+subprocess.call("alias ls='ls --color=auto'", shell=True)
 
 # prevent anything from running if control_alt_delete is present
 if os.isfile("/etc/init/control-alt-delete.conf"):
@@ -240,7 +237,7 @@ shutil.copy("cleanfiles/README", "/etc/sudoers.d/README")
 # removes any sudo configurations
 for file in os.listdir("/etc/sudoers.d"):
     if file != "README":
-        os.system("mv /etc/sudoers.d/" + file + " backups/bad_sudo_configs/" + file)
+        subprocess.call("mv /etc/sudoers.d/" + file + " backups/bad_sudo_configs/" + file, shell=True)
 
 # enable tcp syn cookies
 with open("/etc/sysctl.d/10-network-security.conf", "a") as sysctl:
@@ -252,10 +249,10 @@ with open("/etc/sysctl.d/10-network-security.conf", "a") as sysctl:
     sysctl.write("net.ipv4.conf.default.accept_redirects = 0")
     sysctl.write("net.ipv4.conf.all.secure_redirects = 0")
     sysctl.write("net.ipv4.conf.default.secure_redirects = 0")
-os.system("sysctl --system")
+subprocess.call("sysctl --system", shell=True)
 
 # clearing hosts file
-os.system("cp /etc/hosts backups/hosts")
+subprocess.call("cp /etc/hosts backups/hosts", shell=True)
 with open("/etc/hosts", "w") as hosts:
     hosts.write("127.0.0.1	localhost\n"
                 "127.0.1.1	ubuntu\n"
@@ -281,8 +278,8 @@ if os.ispath("/etc/sshd/ssh_config"):
 
 # harden apache
 if os.ispath("/etc/apache2/apache2.conf"):
-    os.system("chown -R root:root /etc/apache")
-    os.system("chown -R root:root /etc/apache2")
+    subprocess.call("chown -R root:root /etc/apache", shell=True)
+    subprocess.call("chown -R root:root /etc/apache2", shell=True)
     with open("/etc/apache2/apache2.conf", "a") as apache2_config:
         apache2_config.write("<Directory />")
         apache2_config.write("    AllowOverride None")
@@ -299,14 +296,14 @@ for proc in psutil.process_iter(['name', 'pid', 'exe']):
         exe = proc.info['exe']
         with open('logs/netcat_backdoors.log', 'a') as netcat_backdoors:
             netcat_backdoors.write(name + " moved from " + exe + " to backups/" + exe.rsplit('/')[-1])
-            os.system(str("cp " + exe + " backups/" + exe.rsplit('/')[-1]))
-            os.system("rm " + exe)
-            os.system("kill -9 " + pid)
+            subprocess.call(str("cp " + exe + " backups/" + exe.rsplit('/')[-1]), shell=True)
+            subprocess.call("rm " + exe, shell=True)
+            subprocess.call("kill -9 " + pid, shell=True)
 
 # remove any bad crontab files
 for file in os.listdir("/etc/cron.d"):
     if file != "README":
-        os.system("mv /etc/cron.d/" + file + " backups/bad_crontab_files/" + file)
+        subprocess.call("mv /etc/cron.d/" + file + " backups/bad_crontab_files/" + file, shell=True)
 
 # /etc/rc.local should be empty
 with open("/etc/rc.local", "w") as rc_local:
@@ -318,16 +315,16 @@ with open("/etc/fstab", "a+") as fstab:
         fstab.write("#already run\nnone     /run/shm     tmpfs     rw,noexec,nosuid,nodev     0     0")
 
 # only allow root to use cron
-os.system("rm -f /etc/cron.deny")
-os.system("rm -f /etc/at.deny")
-os.system("touch /etc/cron.allow")
-os.system("touch /etc/at.allow")
+subprocess.call("rm -f /etc/cron.deny", shell=True)
+subprocess.call("rm -f /etc/at.deny", shell=True)
+subprocess.call("touch /etc/cron.allow", shell=True)
+subprocess.call("touch /etc/at.allow", shell=True)
 with open("/etc/cron.allow", "w") as cron_allow:
     cron_allow.write("root")
 with open("/etc/at.allow", "w") as at_allow:
     at_allow.write("root")
-os.system("chmod 400 /etc/cron.allow")
-os.system("chmod 400 /etc/at.allow")
+subprocess.call("chmod 400 /etc/cron.allow", shell=True)
+subprocess.call("chmod 400 /etc/at.allow", shell=True)
 
 # remove bad programs
 packages = {"john": "john john-data", "telnetd": "openbsd-inetd telnetd", "logkeys": "logkeys",
@@ -358,12 +355,12 @@ packages = {"john": "john john-data", "telnetd": "openbsd-inetd telnetd", "logke
             "yersinia": "yersinia", "freeciv": "freeciv", "oph-crack": "oph-crack", "kismet": "kismet",
             "minetest": "minetest"}
 
-os.system("dpkg-query -f '${binary:Package}\n' -W > packages_list.txt")
+subprocess.call("dpkg-query -f '${binary:Package}\n' -W > packages_list.txt", shell=True)
 with open("packages_list.txt", "r") as packages_list:
     for package_name in packages_list:
         if package_name in packages:
             if ask("Remove " + package_name + "?"):
-                os.system("dpkg --purge " + packages[package_name])
+                subprocess.call("dpkg --purge " + packages[package_name], shell=True)
                 print("Removed " + package_name)
 
 with open('logs/sus_files.log', 'w') as suspicious_files:
