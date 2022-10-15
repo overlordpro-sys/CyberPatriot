@@ -62,7 +62,7 @@ def dns_flush():
 
 
 def scans():
-    commands = ["chkrootkit", "rkhunter -ppropupd", "rkhunter -c --enable all --disable none", "lynis update info",
+    commands = ["chkrootkit", "rkhunter --propupd", "rkhunter -c --enable all --disable none", "lynis update info",
                 "lynis audit system", "freshclam", "clamscan -r -i"]
     scanOutput = ""
     for command in commands:
