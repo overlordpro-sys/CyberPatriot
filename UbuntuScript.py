@@ -1,4 +1,3 @@
-import errno
 import os
 import shutil
 import subprocess
@@ -100,8 +99,7 @@ for log in logs:
         print(log.rsplit("/", -1)[-1] + " not found")
 
 # install updates and packages
-subprocess.call('apt-get update', shell=True)
-subprocess.call('apt-get upgrade -y', shell=True)
+# apt update and upgrade called separately due to 20.04 crashing
 subprocess.call('apt-get install ufw rkhunter tree debsums libpam-pwquality chkrootkit clamav lynis -y', shell=True)
 subprocess.call('apt-get autoremove -y', shell=True)
 subprocess.call('apt-get autoclean -y', shell=True)
@@ -134,29 +132,24 @@ if os.path.isfile("/etc/lightdm/lightdm.conf"):
 
 print("Changing password policies")
 # password policies
-replace_line("/etc/login.defs", "PASS_MAX_DAYS\t99999", "PASS_MAX_DAYS\t365")
-replace_line("/etc/login.defs", "PASS_MIN_DAYS\t0", "PASS_MIN_DAYS\t1")
+shutil.copy("/etc/login.defs", "backups/passconfig/login.defs")
+shutil.copy("cleanfiles/login.defs", "/etc/login.defs")
 # common-password
-replace_line("/etc/pam.d/common-password", "password\trequisite\t\t\tpam_pwquality.so retry=3",
-             "password\trequisite\t\t\tpam_pwquality.so retry=3 minlen=10 difok=4 ucredit=-1 lcredit=-1 ocredit=-1 dcredit=-1 reject_username enforce_for_root")
-replace_line("/etc/pam.d/common-password",
-             "password\t[success=1 default=ignore]\tpam_unix.so obscure use_authtok try_first_pass sha512",
-             "password\t[success=1 default=ignore]\tpam_unix.so obscure use_authtok try_first_pass sha512 minlen=10 remember=5")
+shutil.copy("/etc/pam.d/common-password", "backups/passconfig/common-password")
+shutil.copy("cleanfiles/common-password", "/etc/pam.d/common-password")
 # common-auth
-replace_line("/etc/pam.d/common-auth", "auth\t[success=1 default=ignore]\tpam_unix.so nullok_secure",
-             "auth\trequired\t\t\tpam_tally2.so deny=4 unlock_time=60\nauth\t[success=1 default=ignore]\tpam_unix.so nullok_secure")
-
+shutil.copy("/etc/pam.d/common-auth", "backups/passconfig/common-auth")
+shutil.copy("cleanfiles/common-auth", "/etc/pam.d/common-auth")
 # common-account
-replace_line("/etc/pam.d/common-account", "account\t[success=1 new_authtok_reqd=done default=ignore]\tpam_unix.so",
-             "account\t[success=1 new_authtok_reqd=done default=ignore]\tpam_unix.so\naccount\trequired\t\t\tpam_tally2.so")
+shutil.copy("/etc/pam.d/common-account", "backups/passconfig/common-account")
+shutil.copy("cleanfiles/common-account", "/etc/pam.d/common-account")
 
 # open passwd file and if users are not in users.txt or admins.txt, delete them
-
 with open('logs/user_changes.log', 'w') as user_changes:
     with open("/etc/passwd") as passwd:
         lines = passwd.readlines()
         for line_number, line in enumerate(lines):
-            split = line.split(":")[0]
+            split = line.split(":")
             user = split[0]
             uid = int(split[2])
             gid = int(split[3])
@@ -207,7 +200,7 @@ subprocess.call("chmod 644 /etc/crontab", shell=True)
 subprocess.call("chmod 640 /etc/ftpusers", shell=True)
 subprocess.call("chmod 440 /etc/inetd.conf", shell=True)
 subprocess.call("chmod 440 /etc/xinetd.conf", shell=True)
-subprocess.call(" 400 /etc/inetd.d", shell=True)
+subprocess.call("chmod 400 /etc/inetd.d", shell=True)
 subprocess.call("chmod 644 /etc/hosts.allow", shell=True)
 subprocess.call("chmod 440 /etc/sudoers", shell=True)
 subprocess.call("chmod 640 /etc/shadow", shell=True)
@@ -226,29 +219,24 @@ subprocess.call("alias ll='ls -alF'", shell=True)
 subprocess.call("alias ls='ls --color=auto'", shell=True)
 
 # prevent anything from running if control_alt_delete is present
-if os.isfile("/etc/init/control-alt-delete.conf"):
+if os.path.isfile("/etc/init/control-alt-delete.conf"):
     with open("/etc/init/control-alt-delete.conf", "w") as control_alt_delete:
         control_alt_delete.write("start on control-alt-delete\ntask\nexec false")
 
 # clean copies of sudoers stuff
+shutil.copy("/etc/sudoers", "backups/sudoconfigs/sudoers")
 shutil.copy("cleanfiles/sudoers", "/etc/sudoers")
+shutil.copy("/etc/sudoers.d/README", "backups/sudoconfigs/README")
 shutil.copy("cleanfiles/README", "/etc/sudoers.d/README")
 
 # removes any sudo configurations
 for file in os.listdir("/etc/sudoers.d"):
     if file != "README":
-        subprocess.call("mv /etc/sudoers.d/" + file + " backups/bad_sudo_configs/" + file, shell=True)
+        subprocess.call("mv /etc/sudoers.d/" + file + " backups/sudoconfigs/" + file, shell=True)
 
 # enable tcp syn cookies
-with open("/etc/sysctl.d/10-network-security.conf", "a") as sysctl:
-    sysctl.write("net.ipv4.tcp_syncookies = 1")
-    sysctl.write("net.ipv4.ip_forward = 0")
-    sysctl.write("net.ipv4.conf.all.send_redirects = 0")
-    sysctl.write("net.ipv4.conf.default.send_redirects = 0")
-    sysctl.write("net.ipv4.conf.all.accept_redirects = 0")
-    sysctl.write("net.ipv4.conf.default.accept_redirects = 0")
-    sysctl.write("net.ipv4.conf.all.secure_redirects = 0")
-    sysctl.write("net.ipv4.conf.default.secure_redirects = 0")
+shutil.copy("/etc/sysctl.d/10-network-security.conf", "backups/10-network-security.conf")
+shutil.copy("cleanfiles/10-network-security.conf", "/etc/sysctl.d/10-network-security.conf")
 subprocess.call("sysctl --system", shell=True)
 
 # clearing hosts file
@@ -263,30 +251,13 @@ with open("/etc/hosts", "w") as hosts:
                 "ff02::2 ip6-allrouters\n")
 
 # harden sshd server
-if os.ispath("/etc/sshd/ssh_config"):
-    with open("/etc/ssh/sshd_config", "a") as sshd_config:
-        sshd_config.write("PasswordAuthentication no")
-        sshd_config.write("PermitRootLogin no")
-        sshd_config.write("PermitEmptyPasswords no")
-        sshd_config.write("Protocol 2")
-        sshd_config.write("ClientAliveInterval 180")
-        sshd_config.write("MaxAuthTries 3")
-        sshd_config.write("X11Forwarding no")
-        sshd_config.write("IgnoreRhosts yes")
-        sshd_config.write("UseDNS yes")
-        sshd_config.write("PubkeyAuthentication yes")
+if os.path.isfile("/etc/ssh/sshd_config"):
+    shutil.copy("/etc/ssh/sshd_config", "backups/sshd_config")
+    shutil.copy("cleanfiles/sshd_config", "/etc/ssh/sshd_config")
 
 # harden apache
-if os.ispath("/etc/apache2/apache2.conf"):
-    subprocess.call("chown -R root:root /etc/apache", shell=True)
-    subprocess.call("chown -R root:root /etc/apache2", shell=True)
-    with open("/etc/apache2/apache2.conf", "a") as apache2_config:
-        apache2_config.write("<Directory />")
-        apache2_config.write("    AllowOverride None")
-        apache2_config.write("    Order deny,allow")
-        apache2_config.write("    Deny from all")
-        apache2_config.write("</Directory>")
-        apache2_config.write("UserDir disabled root")
+if os.path.isfile("/etc/apache2"):
+    shutil.copy("cleanfiles/apache2.conf", "/etc/apache2/apache2.conf")
 
 # remove netcat backdoors
 for proc in psutil.process_iter(['name', 'pid', 'exe']):
@@ -303,7 +274,7 @@ for proc in psutil.process_iter(['name', 'pid', 'exe']):
 # remove any bad crontab files
 for file in os.listdir("/etc/cron.d"):
     if file != "README":
-        subprocess.call("mv /etc/cron.d/" + file + " backups/bad_crontab_files/" + file, shell=True)
+        subprocess.call("mv /etc/cron.d/" + file + " backups/crontab/" + file, shell=True)
 
 # /etc/rc.local should be empty
 with open("/etc/rc.local", "w") as rc_local:
@@ -314,17 +285,6 @@ with open("/etc/fstab", "a+") as fstab:
     if "#already run" not in fstab.read():
         fstab.write("#already run\nnone     /run/shm     tmpfs     rw,noexec,nosuid,nodev     0     0")
 
-# only allow root to use cron
-subprocess.call("rm -f /etc/cron.deny", shell=True)
-subprocess.call("rm -f /etc/at.deny", shell=True)
-subprocess.call("touch /etc/cron.allow", shell=True)
-subprocess.call("touch /etc/at.allow", shell=True)
-with open("/etc/cron.allow", "w") as cron_allow:
-    cron_allow.write("root")
-with open("/etc/at.allow", "w") as at_allow:
-    at_allow.write("root")
-subprocess.call("chmod 400 /etc/cron.allow", shell=True)
-subprocess.call("chmod 400 /etc/at.allow", shell=True)
 
 # remove bad programs
 packages = {"john": "john john-data", "telnetd": "openbsd-inetd telnetd", "logkeys": "logkeys",
@@ -332,7 +292,11 @@ packages = {"john": "john john-data", "telnetd": "openbsd-inetd telnetd", "logke
             "nmap": "nmap zenmap", "crack": "crack crack-common", "medusa": "libssh2-1 medusa", "nikto": "nikto",
             "tightvnc": "xtightvncviewer", "bind9": "bind9 bind9utils",
             "avahi": "avahi-autoipd avahi-daemon avahi-utils",
-            "cupsd": "cups cups-core-drivers printer-driver-hpcups cupsddk indicator-printers printer-driver-splix hplip printer-driver-gutenprint bluez-cups printer-driver-postscript-hp cups-server-common cups-browsed cups-bsd cups-client cups-common cups-daemon cups-ppdc cups-filters cups-filters-core-drivers printer-driver-pxljr printer-driver-foo2zjs foomatic-filters cups-pk-helper",
+            "cupsd": "cups cups-core-drivers printer-driver-hpcups cupsddk indicator-printers printer-driver-splix "
+                     "hplip printer-driver-gutenprint bluez-cups printer-driver-postscript-hp cups-server-common "
+                     "cups-browsed cups-bsd cups-client cups-common cups-daemon cups-ppdc cups-filters "
+                     "cups-filters-core-drivers printer-driver-pxljr printer-driver-foo2zjs foomatic-filters "
+                     "cups-pk-helper",
             "postfix": "postfix", "nginx": "nginx nginx-core nginx-common", "frostwire": "frostwire",
             "vuze": "azureus vuze",
             "samba": "samba samba-common samba-common-bin", "apache2": "apache2 apache2.2-bin", "ftp": "ftp",
@@ -362,11 +326,11 @@ with open("packages_list.txt", "r") as packages_list:
             if ask("Remove " + package_name + "?"):
                 subprocess.call("dpkg --purge " + packages[package_name], shell=True)
                 print("Removed " + package_name)
-
-with open('logs/sus_files.log', 'w') as suspicious_files:
-    output = subprocess.check_output("timeout 60 find / -nouser -o -nogroup", shell=True, text=True)
-    output += subprocess.check_output("timeout 60 find / -perm -2 ! -type l -ls", shell=True, text=True)
-    suspicious_files.write(output)
+#
+# with open('logs/sus_files.log', 'w') as suspicious_files:
+#     output = subprocess.check_output("timeout 60 find / -nouser -o -nogroup", shell=True, text=True)
+#     output += subprocess.check_output("timeout 60 find / -perm -2 ! -type l -ls", shell=True, text=True)
+#     suspicious_files.write(output)
 
 print("Waiting for background processes to finish...")
 firewall.join()
