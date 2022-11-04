@@ -330,7 +330,7 @@ packages = {"john": "john john-data", "telnetd": "openbsd-inetd telnetd", "logke
 subprocess.call("dpkg-query -f '${binary:Package}\n' -W > packages_list.txt", shell=True)
 with open("packages_list.txt", "r") as packages_list:
     for package_name in packages_list:
-        for package in packges:
+        for package in packages:
             if package in packagename:
                 if ask("Remove " + package_name + "?"):
                     subprocess.call("dpkg --purge " + packages[package_name], shell=True)
