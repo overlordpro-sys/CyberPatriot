@@ -116,9 +116,9 @@ dns = Process(target=dns_flush())
 dns.start()
 
 # scans in background
-print("Running scans...")
-scans = Process(target=scans)
-scans.start()
+# print("Running scans...")
+# scans = Process(target=scans)
+# scans.start()
 
 # lightdm stuff
 if os.path.isfile("/etc/lightdm/lightdm.conf"):
@@ -130,19 +130,19 @@ if os.path.isfile("/etc/lightdm/lightdm.conf"):
 # lock root account
 # subprocess.call("passwd -l root", shell=True)
 
-print("Changing password policies")
-# password policies
-shutil.copy("/etc/login.defs", "backups/passconfig/login.defs")
-shutil.copy("cleanfiles/login.defs", "/etc/login.defs")
-# common-password
-shutil.copy("/etc/pam.d/common-password", "backups/passconfig/common-password")
-shutil.copy("cleanfiles/common-password", "/etc/pam.d/common-password")
-# common-auth
-shutil.copy("/etc/pam.d/common-auth", "backups/passconfig/common-auth")
-shutil.copy("cleanfiles/common-auth", "/etc/pam.d/common-auth")
-# common-account
-shutil.copy("/etc/pam.d/common-account", "backups/passconfig/common-account")
-shutil.copy("cleanfiles/common-account", "/etc/pam.d/common-account")
+# print("Changing password policies")
+# # password policies
+# shutil.copy("/etc/login.defs", "backups/passconfig/login.defs")
+# shutil.copy("cleanfiles/login.defs", "/etc/login.defs")
+# # common-password
+# shutil.copy("/etc/pam.d/common-password", "backups/passconfig/common-password")
+# shutil.copy("cleanfiles/common-password", "/etc/pam.d/common-password")
+# # common-auth
+# shutil.copy("/etc/pam.d/common-auth", "backups/passconfig/common-auth")
+# shutil.copy("cleanfiles/common-auth", "/etc/pam.d/common-auth")
+# # common-account
+# shutil.copy("/etc/pam.d/common-account", "backups/passconfig/common-account")
+# shutil.copy("cleanfiles/common-account", "/etc/pam.d/common-account")
 
 # open passwd file and if users are not in users.txt or admins.txt, delete them
 with open('logs/user_changes.log', 'w') as user_changes:
@@ -322,10 +322,11 @@ packages = {"john": "john john-data", "telnetd": "openbsd-inetd telnetd", "logke
 subprocess.call("dpkg-query -f '${binary:Package}\n' -W > packages_list.txt", shell=True)
 with open("packages_list.txt", "r") as packages_list:
     for package_name in packages_list:
-        if package_name in packages:
-            if ask("Remove " + package_name + "?"):
-                subprocess.call("dpkg --purge " + packages[package_name], shell=True)
-                print("Removed " + package_name)
+        for package in packges:
+            if package in packagename:
+                if ask("Remove " + package_name + "?"):
+                    subprocess.call("dpkg --purge " + packages[package_name], shell=True)
+                    print("Removed " + package_name)
 #
 # with open('logs/sus_files.log', 'w') as suspicious_files:
 #     output = subprocess.check_output("timeout 60 find / -nouser -o -nogroup", shell=True, text=True)
