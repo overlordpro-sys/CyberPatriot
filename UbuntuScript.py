@@ -224,6 +224,8 @@ if os.path.isfile("/etc/init/control-alt-delete.conf"):
         control_alt_delete.write("start on control-alt-delete\ntask\nexec false")
 
 # clean copies of sudoers stuff
+if not os.path.exists("backups/sudoconfigs"):
+    os.mkdir("backups/sudoconfigs")
 shutil.copy("/etc/sudoers", "backups/sudoconfigs/sudoers")
 shutil.copy("cleanfiles/sudoers", "/etc/sudoers")
 shutil.copy("/etc/sudoers.d/README", "backups/sudoconfigs/README")
@@ -240,6 +242,8 @@ shutil.copy("cleanfiles/10-network-security.conf", "/etc/sysctl.d/10-network-sec
 subprocess.call("sysctl --system", shell=True)
 
 # clearing hosts file
+if not os.path.exists("backups/hosts"):
+    os.mkdir("backups/hosts")
 subprocess.call("cp /etc/hosts backups/hosts", shell=True)
 with open("/etc/hosts", "w") as hosts:
     hosts.write("127.0.0.1	localhost\n"
@@ -251,6 +255,8 @@ with open("/etc/hosts", "w") as hosts:
                 "ff02::2 ip6-allrouters\n")
 
 # harden sshd server
+if not os.path.exists("backups/sshd_config"):
+    os.mkdir("backups/sshd_config")
 if os.path.isfile("/etc/ssh/sshd_config"):
     shutil.copy("/etc/ssh/sshd_config", "backups/sshd_config")
     shutil.copy("cleanfiles/sshd_config", "/etc/ssh/sshd_config")
@@ -272,6 +278,8 @@ for proc in psutil.process_iter(['name', 'pid', 'exe']):
             subprocess.call("kill -9 " + pid, shell=True)
 
 # remove any bad crontab files
+if not os.path.exists("backups/crontab"):
+    os.mkdir("backups/crontab")
 for file in os.listdir("/etc/cron.d"):
     if file != "README":
         subprocess.call("mv /etc/cron.d/" + file + " backups/crontab/" + file, shell=True)
