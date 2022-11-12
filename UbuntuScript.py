@@ -2,6 +2,7 @@ import os
 import shutil
 import subprocess
 import sys
+from configparser import ConfigParser
 from multiprocessing import Process
 
 import psutil
@@ -148,6 +149,8 @@ with open("/etc/dconf/profile/gdm", "w") as f:
     f.write("user-db:user\n")
     f.write("system-db:gdm\n")
     f.write("file-db:/usr/share/gdm/greeter-dconf-defaults\n")
+if not os.path.exists("/etc/dconf/db/gdm.d"):
+    os.mkdir("/etc/dconf/db/gdm.d")
 with open("/etc/dconf/db/gdm.d/00-login-screen", "w") as f:
     f.write("[org/gnome/login-screen]\n")
     f.write("disable-user-list=true\n")
@@ -157,6 +160,8 @@ subprocess.call("dconf update", shell=True)
 subprocess.call("usermod -L guest", shell=True)
 
 # disable media automount in GNOME
+if not os.path.exists("/etc/dconf/db/local.d"):
+    os.mkdir("/etc/dconf/db/local.d")
 with open("/etc/dconf/db/local.d/00-media-automount", "w") as f:
     f.write("[org/gnome/desktop/media-handling]\n")
     f.write("automount=false\n")
@@ -168,10 +173,12 @@ subprocess.call("systemctl stop avahi-daaemon.service", shell=True)
 subprocess.call("systemctl stop avahi-daemon.socket", shell=True)
 subprocess.call("apt purge avahi-daemon", shell=True)
 
+
+configparser = ConfigParser()
+configparser.read("/etc/postfix/main.cf")
 # ensure mail transfer agent local only
-with open("/etc/postfix/main.cf", "a") as f:
-    if "loopback_only" not in f.read():
-        f.write("inet_interfaces = loopback-only\n")
+shutil.copy("clean_files/main.cf", "/etc/postfix/main.cf")
+
 
 # remove rsync
 subprocess.call("apt purge rsync", shell=True)
