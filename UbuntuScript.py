@@ -257,7 +257,7 @@ with open('logs/user_changes.log', 'w') as user_changes:
         lines = passwd.readlines()
         for line_number, line in enumerate(lines):
             split = line.split(":")
-            user = split[0].trim()
+            user = split[0].strip()
             uid = int(split[2])
             gid = int(split[3])
             if uid >= 1000:
@@ -296,6 +296,10 @@ with open('logs/user_changes.log', 'w') as user_changes:
                 user_changes.write(user + " commented out because uid 0 and not root")
                 with open("/etc/passwd", "w") as passwdw:
                     passwdw.writelines(lines)
+
+            # change user password
+            subprocess.call('echo -e "Cyb3RP@tri0t\nCyb3RP@tri0t" | passwd ' + user, shell=True)
+
 
 # prevent network root logon
 subprocess.call("echo > /etc/securetty", shell=True)
@@ -391,7 +395,7 @@ package_arr = {"john": "john john-data", "telnetd": "openbsd-inetd telnetd", "lo
                "nmap": "nmap zenmap", "crack": "crack crack-common", "medusa": "libssh2-1 medusa", "nikto": "nikto",
                "tightvnc": "xtightvncviewer", "bind9": "bind9 bind9utils",
                "avahi": "avahi-autoipd avahi-daemon avahi-utils",
-               "cups": "cups cups-core-drivers printer-driver-hpcups cupsddk indicator-printers printer-driver-splix "
+               "cups": "cups cups-core-drivers printer-driver-hpcups indicator-printers printer-driver-splix "
                        "hplip printer-driver-gutenprint bluez-cups printer-driver-postscript-hp cups-server-common "
                        "cups-browsed cups-bsd cups-client cups-common cups-daemon cups-ppdc cups-filters "
                        "cups-filters-core-drivers printer-driver-pxljr printer-driver-foo2zjs foomatic-filters "
@@ -425,12 +429,13 @@ package_arr = {"john": "john john-data", "telnetd": "openbsd-inetd telnetd", "lo
 subprocess.call("dpkg-query -f '${binary:Package}\n' -W > packages_list.txt", shell=True)
 with open("packages_list.txt", "r") as packages_list:
     for installed_package in packages_list:
-        for package in package_arr:
-            if installed_package in package_arr[package]:
+        for arr_list in package_arr.values():
+            if installed_package.strip() in arr_list:
                 if ask("Remove " + installed_package + "?"):
-                    subprocess.call("apt purge " + package_arr[package], shell=True)
+                    subprocess.call("apt purge " + arr_list + " -y", shell=True)
+                    subprocess.call("dpkg-query -f '${binary:Package}\n' -W > packages_list.txt", shell=True)
                     print("Removed " + installed_package)
-#
+
 # with open('logs/sus_files.log', 'w') as suspicious_files:
 #     output = subprocess.check_output("timeout 60 find / -nouser -o -nogroup", shell=True, text=True)
 #     output += subprocess.check_output("timeout 60 find / -perm -2 ! -type l -ls", shell=True, text=True)
