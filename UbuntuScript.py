@@ -105,6 +105,95 @@ subprocess.call('apt-get autoremove -y', shell=True)
 subprocess.call('apt-get autoclean -y', shell=True)
 subprocess.call('apt-get check', shell=True)
 
+# CIS benchmark
+# disable unused modules
+modules = ["cramfs", "squashfs", "udf", "usb-storage"]
+for module in modules:
+    with open("/etc/modprobe.d/" + module + ".conf", "w") as f:
+        f.write("install " + module + " /bin/true\n")
+        f.write("blacklist " + module + "\n")
+
+# disable automount
+subprocess.call("apt purge autofs", shell=True)
+
+# randomize kernel va space
+with open("/etc/sysctl.d/60-kernel_sysctl.conf", "w") as f:
+    f.write("kernel.randomize_va_space = 2\n")
+
+# disable core dumps
+with open("/etc/sysctl.conf", "a") as f:
+    f.write("fs.suid_dumpable=0\n")
+
+# ensure auditd is installed
+subprocess.call("apt install auditd audispd-plugins", shell=True)
+subprocess.call("systemctl --now enable auditd", shell=True)
+
+# ensure apparmor and auditd are enabled in bootloader configuration
+with open("/etc/default/grub", "r+") as f:
+    content = f.read()
+    if "audit=1" not in content:
+        f.seek(0)
+        content = content.replace("GRUB_CMDLINE_LINUX=\"", "GRUB_CMDLINE_LINUX=\"audit=1 apparmor=1 security=apparmor "
+                                                           "audit_backlog_limit=8192")
+        f.write(content)
+        f.truncate()
+subprocess.call("update-grub", shell=True)
+
+# remove motd
+if os.path.isfile("/etc/motd"):
+    subprocess.call("rm -R /etc/motd", shell=True)
+
+# disable user list for gdm3
+with open("/etc/dconf/profile/gdm", "w") as f:
+    f.write("user-db:user\n")
+    f.write("system-db:gdm\n")
+    f.write("file-db:/usr/share/gdm/greeter-dconf-defaults\n")
+with open("/etc/dconf/db/gdm.d/00-login-screen", "w") as f:
+    f.write("[org/gnome/login-screen]\n")
+    f.write("disable-user-list=true\n")
+subprocess.call("dconf update", shell=True)
+
+# disable guest account
+subprocess.call("usermod -L guest", shell=True)
+
+# disable media automount in GNOME
+with open("/etc/dconf/db/local.d/00-media-automount", "w") as f:
+    f.write("[org/gnome/desktop/media-handling]\n")
+    f.write("automount=false\n")
+    f.write("automount-open=false\n")
+subprocess.call("dconf update", shell=True)
+
+# ensure avahi server not installed
+subprocess.call("systemctl stop avahi-daaemon.service", shell=True)
+subprocess.call("systemctl stop avahi-daemon.socket", shell=True)
+subprocess.call("apt purge avahi-daemon", shell=True)
+
+# ensure mail transfer agent local only
+with open("/etc/postfix/main.cf", "a") as f:
+    if "loopback_only" not in f.read():
+        f.write("inet_interfaces = loopback-only\n")
+
+# remove rsync
+subprocess.call("apt purge rsync", shell=True)
+
+# disable wireless interfaces (re-enable with nmcli radio wifi on)
+subprocess.call("nmcli radio wifi off", shell=True)
+
+# disable ipv4 redirects
+subprocess.call("/sbin/sysctl -w net.ipv4.conf.all.send_redirects=0", shell=True)
+
+# disable ip forwarding
+subprocess.call("/sbin/sysctl -w net.ipv4.ip_forward=0", shell=True)
+subprocess.call("/sbin/sysctl -w net.ipv6.conf.all.forwarding=0", shell=True)
+
+
+
+
+
+
+
+
+
 # firewall stuff in background
 print("Configuring firewall...")
 firewall = Process(target=firewall_config)
@@ -130,19 +219,19 @@ if os.path.isfile("/etc/lightdm/lightdm.conf"):
 # lock root account
 # subprocess.call("passwd -l root", shell=True)
 
-# print("Changing password policies")
-# # password policies
-# shutil.copy("/etc/login.defs", "backups/passconfig/login.defs")
-# shutil.copy("cleanfiles/login.defs", "/etc/login.defs")
-# # common-password
-# shutil.copy("/etc/pam.d/common-password", "backups/passconfig/common-password")
-# shutil.copy("cleanfiles/common-password", "/etc/pam.d/common-password")
-# # common-auth
-# shutil.copy("/etc/pam.d/common-auth", "backups/passconfig/common-auth")
-# shutil.copy("cleanfiles/common-auth", "/etc/pam.d/common-auth")
-# # common-account
-# shutil.copy("/etc/pam.d/common-account", "backups/passconfig/common-account")
-# shutil.copy("cleanfiles/common-account", "/etc/pam.d/common-account")
+print("Changing password policies")
+# password policies
+shutil.copy("/etc/login.defs", "backups/passconfig/login.defs")
+shutil.copy("clean_files/login.defs", "/etc/login.defs")
+# common-password
+shutil.copy("/etc/pam.d/common-password", "backups/passconfig/common-password")
+shutil.copy("clean_files/common-password", "/etc/pam.d/common-password")
+# common-auth
+shutil.copy("/etc/pam.d/common-auth", "backups/passconfig/common-auth")
+shutil.copy("clean_files/common-auth", "/etc/pam.d/common-auth")
+# common-account
+shutil.copy("/etc/pam.d/common-account", "backups/passconfig/common-account")
+shutil.copy("clean_files/common-account", "/etc/pam.d/common-account")
 
 # open passwd file and if users are not in users.txt or admins.txt, delete them
 with open('logs/user_changes.log', 'w') as user_changes:
@@ -150,7 +239,7 @@ with open('logs/user_changes.log', 'w') as user_changes:
         lines = passwd.readlines()
         for line_number, line in enumerate(lines):
             split = line.split(":")
-            user = split[0]
+            user = split[0].trim()
             uid = int(split[2])
             gid = int(split[3])
             if uid >= 1000:
@@ -183,7 +272,7 @@ with open('logs/user_changes.log', 'w') as user_changes:
                                 subprocess.call("gpasswd -a " + user + " sudo", shell=True)
                                 print(user + " added to sudo group")
                                 user_changes.write(user + " added to sudo group")
-            if user is not "root" and (uid == 0 or gid == 0):
+            if user != "root" and (uid == 0 or gid == 0):
                 lines[line_number] = "#" + line
                 print("commented out " + user + " because uid 0 and not root")
                 user_changes.write(user + " commented out because uid 0 and not root")
@@ -193,20 +282,7 @@ with open('logs/user_changes.log', 'w') as user_changes:
 # prevent network root logon
 subprocess.call("echo > /etc/securetty", shell=True)
 
-# change ownership of files
-subprocess.call("chown root:root /etc/securetty", shell=True)
-subprocess.call("chmod 0600 /etc/securetty", shell=True)
-subprocess.call("chmod 644 /etc/crontab", shell=True)
-subprocess.call("chmod 640 /etc/ftpusers", shell=True)
-subprocess.call("chmod 440 /etc/inetd.conf", shell=True)
-subprocess.call("chmod 440 /etc/xinetd.conf", shell=True)
-subprocess.call("chmod 400 /etc/inetd.d", shell=True)
-subprocess.call("chmod 644 /etc/hosts.allow", shell=True)
-subprocess.call("chmod 440 /etc/sudoers", shell=True)
-subprocess.call("chmod 640 /etc/shadow", shell=True)
-subprocess.call("chown root:root /etc/shadow", shell=True)
-subprocess.call("chmod 644 /etc/passwd", shell=True)
-subprocess.call("chmod 644 /etc/group", shell=True)
+
 
 # Remove unwanted aliases
 subprocess.call("unalias -a", shell=True)
@@ -227,18 +303,22 @@ if os.path.isfile("/etc/init/control-alt-delete.conf"):
 if not os.path.exists("backups/sudoconfigs"):
     os.mkdir("backups/sudoconfigs")
 shutil.copy("/etc/sudoers", "backups/sudoconfigs/sudoers")
-shutil.copy("cleanfiles/sudoers", "/etc/sudoers")
+shutil.copy("clean_files/sudoers", "/etc/sudoers")
 shutil.copy("/etc/sudoers.d/README", "backups/sudoconfigs/README")
-shutil.copy("cleanfiles/README", "/etc/sudoers.d/README")
+shutil.copy("clean_files/README", "/etc/sudoers.d/README")
 
 # removes any sudo configurations
 for file in os.listdir("/etc/sudoers.d"):
     if file != "README":
         subprocess.call("mv /etc/sudoers.d/" + file + " backups/sudoconfigs/" + file, shell=True)
 
+# sysctl hardening
+shutil.copy("/etc/sysctl.conf", "backups/sysctl.conf")
+shutil.copy("clean_files/sysctl.conf", "/etc/sysctl.conf")
+
 # enable tcp syn cookies
 shutil.copy("/etc/sysctl.d/10-network-security.conf", "backups/10-network-security.conf")
-shutil.copy("cleanfiles/10-network-security.conf", "/etc/sysctl.d/10-network-security.conf")
+shutil.copy("clean_files/10-network-security.conf", "/etc/sysctl.d/10-network-security.conf")
 subprocess.call("sysctl --system", shell=True)
 
 # clearing hosts file
@@ -259,11 +339,11 @@ if not os.path.exists("backups/sshd_config"):
     os.mkdir("backups/sshd_config")
 if os.path.isfile("/etc/ssh/sshd_config"):
     shutil.copy("/etc/ssh/sshd_config", "backups/sshd_config")
-    shutil.copy("cleanfiles/sshd_config", "/etc/ssh/sshd_config")
+    shutil.copy("clean_files/sshd_config", "/etc/ssh/sshd_config")
 
 # harden apache
 if os.path.isfile("/etc/apache2"):
-    shutil.copy("cleanfiles/apache2.conf", "/etc/apache2/apache2.conf")
+    shutil.copy("clean_files/apache2.conf", "/etc/apache2/apache2.conf")
 
 # remove netcat backdoors
 for proc in psutil.process_iter(['name', 'pid', 'exe']):
@@ -293,57 +373,98 @@ with open("/etc/fstab", "a+") as fstab:
     if "#already run" not in fstab.read():
         fstab.write("#already run\nnone     /run/shm     tmpfs     rw,noexec,nosuid,nodev     0     0")
 
-
 # remove bad programs
-packages = {"john": "john john-data", "telnetd": "openbsd-inetd telnetd", "logkeys": "logkeys",
-            "hydra": "hydra-gtk hydra", "fakeroot": "fakeroot",
-            "nmap": "nmap zenmap", "crack": "crack crack-common", "medusa": "libssh2-1 medusa", "nikto": "nikto",
-            "tightvnc": "xtightvncviewer", "bind9": "bind9 bind9utils",
-            "avahi": "avahi-autoipd avahi-daemon avahi-utils",
-            "cupsd": "cups cups-core-drivers printer-driver-hpcups cupsddk indicator-printers printer-driver-splix "
-                     "hplip printer-driver-gutenprint bluez-cups printer-driver-postscript-hp cups-server-common "
-                     "cups-browsed cups-bsd cups-client cups-common cups-daemon cups-ppdc cups-filters "
-                     "cups-filters-core-drivers printer-driver-pxljr printer-driver-foo2zjs foomatic-filters "
-                     "cups-pk-helper",
-            "postfix": "postfix", "nginx": "nginx nginx-core nginx-common", "frostwire": "frostwire",
-            "vuze": "azureus vuze",
-            "samba": "samba samba-common samba-common-bin", "apache2": "apache2 apache2.2-bin", "ftp": "ftp",
-            "vsftpd": "vsftpd", "netcat": "netcat-traditional netcat-openbsd",
-            "openssh": "openssh-server openssh-client ssh",
-            "weplab": "weplab", "pyrit": "pyrit", "mysql": "mysql-server php5-mysql", "php5": "php5",
-            "proftpd-basic": "proftpd-basic", "filezilla": "filezilla",
-            "postgresql": "postgresql", "irssi": "irssi",
-            "wireshark": "wireshark wireshark-common wireshark-qt wireshark-gtk libwireshark-data libwireshark13",
-            "libpcap": "libpcap-dev libpcap0.8 libpcap0.8-dev libpcap0.9 libpcap0.9-dev",
-            "metasploit": "metasploit-framework",
-            "dirb": "dirb", "aircrack-ng": "aircrack-ng",
-            "sqpmap": "sqpmap", "wifite": "wifite wifite-gui wifite-cli",
-            "autopsy": "autopsy autopsy-gui autopsy-cli",
-            "setoolkit": "setoolkit", "ncrack": "ncrack", "nmap-ncat": "nmap-ncat",
-            "skipfish": "skipfish", "maltego": "maltego", "maltegoce": "maltegoce",
-            "nessus": "nessus nessus-cli nessus-server",
-            "beef": "beef beef-xss beef-xss-ruby beef-xss-python",
-            "apktool": "apktool", "snort": "snort", "suricata": "suricata",
-            "yersinia": "yersinia", "freeciv": "freeciv", "oph-crack": "oph-crack", "kismet": "kismet",
-            "minetest": "minetest"}
+package_arr = {"john": "john john-data", "telnetd": "openbsd-inetd telnetd", "logkeys": "logkeys",
+               "hydra": "hydra-gtk hydra", "fakeroot": "fakeroot",
+               "nmap": "nmap zenmap", "crack": "crack crack-common", "medusa": "libssh2-1 medusa", "nikto": "nikto",
+               "tightvnc": "xtightvncviewer", "bind9": "bind9 bind9utils",
+               "avahi": "avahi-autoipd avahi-daemon avahi-utils",
+               "cups": "cups cups-core-drivers printer-driver-hpcups cupsddk indicator-printers printer-driver-splix "
+                       "hplip printer-driver-gutenprint bluez-cups printer-driver-postscript-hp cups-server-common "
+                       "cups-browsed cups-bsd cups-client cups-common cups-daemon cups-ppdc cups-filters "
+                       "cups-filters-core-drivers printer-driver-pxljr printer-driver-foo2zjs foomatic-filters "
+                       "cups-pk-helper",
+               "postfix": "postfix", "nginx": "nginx nginx-core nginx-common", "frostwire": "frostwire",
+               "vuze": "azureus vuze",
+               "samba": "samba samba-common samba-common-bin", "apache2": "apache2 apache2.2-bin", "ftp": "ftp",
+               "vsftpd": "vsftpd", "netcat": "netcat-traditional netcat-openbsd",
+               "openssh": "openssh-server openssh-client ssh",
+               "weplab": "weplab", "pyrit": "pyrit", "mysql": "mysql-server php5-mysql", "php5": "php5",
+               "proftpd-basic": "proftpd-basic", "filezilla": "filezilla",
+               "postgresql": "postgresql", "irssi": "irssi",
+               "wireshark": "wireshark wireshark-common wireshark-qt wireshark-gtk libwireshark-data libwireshark13",
+               "libpcap": "libpcap-dev libpcap0.8 libpcap0.8-dev libpcap0.9 libpcap0.9-dev",
+               "metasploit": "metasploit-framework",
+               "dirb": "dirb", "aircrack-ng": "aircrack-ng",
+               "sqpmap": "sqpmap", "wifite": "wifite wifite-gui wifite-cli",
+               "autopsy": "autopsy autopsy-gui autopsy-cli",
+               "setoolkit": "setoolkit", "ncrack": "ncrack", "nmap-ncat": "nmap-ncat",
+               "skipfish": "skipfish", "maltego": "maltego", "maltegoce": "maltegoce",
+               "nessus": "nessus nessus-cli nessus-server",
+               "beef": "beef beef-xss beef-xss-ruby beef-xss-python",
+               "apktool": "apktool", "snort": "snort", "suricata": "suricata",
+               "yersinia": "yersinia", "freeciv": "freeciv", "oph-crack": "oph-crack", "kismet": "kismet",
+               "minetest": "minetest", "isc-dhcp-server": "isc-dhcp-server", "dhcp3-server": "dhcp3-server",
+               "slapd": "slapd", "nfs-kernel-server": "nfs-kernel-server", "dovecot-imapd": "dovecot-imapd",
+               "dovecot-pop3d": "dovecot-pop3d", "dovecot-common": "dovecot-common", "squid": "squid",
+               "snmp": "snmp", "nis": "nis", "rsh-client": "rsh-client", "talk": "talk", "telnet": "telnet",
+               "ldap-utils": "ldap-utils", "rpcbind": "rpcbind"}
 
 subprocess.call("dpkg-query -f '${binary:Package}\n' -W > packages_list.txt", shell=True)
 with open("packages_list.txt", "r") as packages_list:
-    for package_name in packages_list:
-        for package in packages:
-            if package in package_name:
-                if ask("Remove " + package_name + "?"):
-                    subprocess.call("dpkg --purge " + packages[package], shell=True)
-                    print("Removed " + package_name)
+    for installed_package in packages_list:
+        for package in package_arr:
+            if installed_package in package_arr[package]:
+                if ask("Remove " + installed_package + "?"):
+                    subprocess.call("apt purge " + package_arr[package], shell=True)
+                    print("Removed " + installed_package)
 #
 # with open('logs/sus_files.log', 'w') as suspicious_files:
 #     output = subprocess.check_output("timeout 60 find / -nouser -o -nogroup", shell=True, text=True)
 #     output += subprocess.check_output("timeout 60 find / -perm -2 ! -type l -ls", shell=True, text=True)
 #     suspicious_files.write(output)
 
+# change ownership of files
+subprocess.call("chown root:root /etc/securetty", shell=True)
+subprocess.call("chmod 0600 /etc/securetty", shell=True)
+subprocess.call("chmod 644 /etc/crontab", shell=True)
+subprocess.call("chmod 744 /etc/cron.daily", shell=True)
+subprocess.call("chmod 744 /etc/cron.hourly", shell=True)
+subprocess.call("chmod 744 /etc/cron.monthly", shell=True)
+subprocess.call("chmod 744 /etc/cron.weekly", shell=True)
+subprocess.call("chmod 744 /etc/cron.d", shell=True)
+with open("/etc/cron.allow", "w") as cron_allow:
+    cron_allow.write("root")
+with open("/etc/at.allow", "w") as at_allow:
+    at_allow.write("root")
+subprocess.call("chmod 644 /etc/cron.allow", shell=True)
+subprocess.call("chmod 644 /etc/at.allow", shell=True)
+subprocess.call("chmod 640 /etc/ftpusers", shell=True)
+subprocess.call("chmod 440 /etc/inetd.conf", shell=True)
+subprocess.call("chmod 440 /etc/xinetd.conf", shell=True)
+subprocess.call("chmod 400 /etc/inetd.d", shell=True)
+subprocess.call("chmod 644 /etc/hosts.allow", shell=True)
+subprocess.call("chmod 440 /etc/sudoers", shell=True)
+subprocess.call("chmod 640 /etc/shadow", shell=True)
+subprocess.call("chown root:root /etc/shadow", shell=True)
+subprocess.call("chmod u-x,g-wx,o-rwx /etc/shadow", shell=True)
+subprocess.call("chown root:root /etc/shadow-", shell=True)
+subprocess.call("chmod u-x,g-wx,o-rwx /etc/shadow-", shell=True)
+subprocess.call("chown root:root /etc/gshadow", shell=True)
+subprocess.call("chmod u-x,g-wx,o-rwx /etc/gshadow", shell=True)
+subprocess.call("chown root:root /etc/passwd", shell=True)
+subprocess.call("chmod u-x,go-wx /etc/passwd", shell=True)
+subprocess.call("chown root:root /etc/group", shell=True)
+subprocess.call("chmod u-x,go-wx /etc/group", shell=True)
+subprocess.call("chown root:root /etc/group-", shell=True)
+subprocess.call("chmod u-x,go-wx /etc/group-", shell=True)
+subprocess.call("chmod 644 /etc/issue", shell=True)
+subprocess.call("chmod 644 /etc/issue.net", shell=True)
+
 print("Waiting for background processes to finish...")
 firewall.join()
 dns.join()
 scans.join()
 
-print("Script finished. Check dpkg for other bad packages. Check for bad media files.")
+print("Script finished. Check dpkg for other bad packages. Check for bad media files. Look for world writable files")
+#pg757
