@@ -464,7 +464,5 @@ subprocess.call("chmod 644 /etc/issue.net", shell=True)
 print("Waiting for background processes to finish...")
 firewall.join()
 dns.join()
-scans.join()
 
 print("Script finished. Check dpkg for other bad packages. Check for bad media files. Look for world writable files")
-#pg757
