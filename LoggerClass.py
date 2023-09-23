@@ -1,3 +1,4 @@
+from datetime import datetime
 class Logger:
     def __init__(self, filename):
         self.log_file = open(filename, 'a')
