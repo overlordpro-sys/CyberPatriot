@@ -98,34 +98,36 @@ def userAudit(user_path, admin_path, logger: Logger):
             else:
                 system_users.add(username)
 
-    # Remove unauthorized users
+    # Find unauthorized users and comment out their lines in /etc/passwd
     unauthorized_users = normal_users - users - admins
-    if (unauthorized_users):
-        logger.logH2("Removing unauthorized users")
-        with open('/etc/passwd', 'w') as file:
+    if unauthorized_users:
+        # Create a temporary file
+        with tempfile.NamedTemporaryFile(mode='w', delete=False) as temp_file:
             for line in passwd_lines:
                 username = line.split(':')[0]
                 if username in unauthorized_users:
-                    file.write('#' + line)
-                    logger.logChange(f"Disabled unauthorized user: {username}")
+                    temp_file.write('#' + line)
+                    normal_users.remove(username)
+                    logger.log(f"Disabled unauthorized user: {username}")
                 else:
-                    file.write(line)
-        logger.logHEnd()
+                    temp_file.write(line)
+
+            temp_filename = temp_file.name
+        # Rename the temporary file to replace the original /etc/passwd
+        os.rename(temp_filename, '/etc/passwd')
 
     # Audit admin permissions
     logger.logH2("Checking user permissions...")
-    for user in users:
-        if user in admins:
+    for user in normal_users:
+        if user in users:
             # Remove user from adm and sudo groups
             subprocess.run(['gpasswd', '-d', user, 'adm'])
             subprocess.run(['gpasswd', '-d', user, 'sudo'])
             logger.logChange(f"Removed admin privileges from {user}")
-
-    for admin in admins:
-        if admin not in users:
+        if user in admins:
             # Add admin to adm and sudo groups
-            subprocess.run(['gpasswd', '-a', admin, 'adm'])
-            subprocess.run(['gpasswd', '-a', admin, 'sudo'])
+            subprocess.run(['gpasswd', '-a', user, 'adm'])
+            subprocess.run(['gpasswd', '-a', user, 'sudo'])
             logger.logChange(f"Granted admin privileges to {admin}")
     logger.logHEnd()
 
