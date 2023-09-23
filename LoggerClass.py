@@ -4,10 +4,10 @@ class Logger:
         self.log_file = open(filename, 'a')
 
     def logH1(self, message):
-        self.log_file.write(f"XX---- {message.upper()} ----XX")
+        self.log_file.write(f"XX---- {message.upper()} ----XX\n")
 
     def logH2(self, message):
-        self.log_file.write(f"------ {message} ------")
+        self.log_file.write(f"------ {message} ------\n")
 
     def logChange(self, message):
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
