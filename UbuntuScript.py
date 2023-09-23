@@ -99,9 +99,13 @@ def userAudit(user_path, admin_path, log: Logger):
     print(system_users)
     print(normal_users)
 
+    unauthorized_users = normal_users - users - admins
+    print("unauthorized")
+    print(unauthorized_users)
+
 def test():
     logger = Logger('log.txt')
-    userAudit('users.txt', 'admin.txt', logger)
+    userAudit('users.txt', 'admins.txt', logger)
 
 
 def main():
