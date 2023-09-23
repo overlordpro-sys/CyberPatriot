@@ -3,7 +3,7 @@ class Logger:
         self.log_file = open(filename, 'a')
 
     def logH1(self, message):
-        self.log_file.write(f"XX---- {upper(message)} ----XX")
+        self.log_file.write(f"XX---- {message.upper()} ----XX")
 
     def logH2(self, message):
         self.log_file.write(f"------ {message} ------")
