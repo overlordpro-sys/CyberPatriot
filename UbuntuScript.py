@@ -76,10 +76,12 @@ def scans():
         scanlog.write(scanOutput)
 
 
-def userAudit(user_path, admin_path, log: Logger):
+def userAudit(user_path, admin_path, logger: Logger):
+    logger.logH1("USER AUDITING")
     # Initialize paths
     with open(user_path, 'r') as file:
         users = set(file.read().splitlines())
+        users.add('nobody')
     with open(admin_path, 'r') as file:
         admins = set(file.read().splitlines())
     with open('/etc/passwd', 'r') as file:
@@ -96,12 +98,44 @@ def userAudit(user_path, admin_path, log: Logger):
             else:
                 system_users.add(username)
 
-    print(system_users)
-    print(normal_users)
-
+    # Remove unauthorized users
     unauthorized_users = normal_users - users - admins
-    print("unauthorized")
-    print(unauthorized_users)
+    if (unauthorized_users):
+        logger.logH2("Removing unauthorized users")
+        with open('/etc/passwd', 'w') as file:
+            for line in passwd_lines:
+                username = line.split(':')[0]
+                if username in unauthorized_users:
+                    file.write('#' + line)
+                    logger.logChange(f"Disabled unauthorized user: {username}")
+                else:
+                    file.write(line)
+        logger.logHEnd()
+
+    # Audit admin permissions
+    logger.logH2("Checking user permissions...")
+    for user in users:
+        if user in admins:
+            # Remove user from adm and sudo groups
+            subprocess.run(['gpasswd', '-d', user, 'adm'])
+            subprocess.run(['gpasswd', '-d', user, 'sudo'])
+            logger.logChange(f"Removed admin privileges from {user}")
+
+    for admin in admins:
+        if admin not in users:
+            # Add admin to adm and sudo groups
+            subprocess.run(['gpasswd', '-a', admin, 'adm'])
+            subprocess.run(['gpasswd', '-a', admin, 'sudo'])
+            logger.logChange(f"Granted admin privileges to {admin}")
+    logger.logHEnd()
+
+    # Change to secure password
+    logger.logH2("Changing passwords...")
+    password = 'Cyb3rPatri0t!'
+    for user in users.union(admins):
+        subprocess.run(['echo', f'{user}:{password}', '|', 'chpasswd'])
+        logger.logChange(f"Password changed for {user}")
+    logger.logHEnd()
 
 def test():
     logger = Logger('log.txt')
