@@ -117,18 +117,19 @@ def userAudit(user_path, admin_path, logger: Logger):
         os.rename(temp_filename, '/etc/passwd')
 
     # Audit admin permissions
+    # NOT WORKING, PASSWORD DOESNT CHANGE
     logger.logH2("Checking user permissions...")
     for user in normal_users:
         if user in users:
             # Remove user from adm and sudo groups
-            subprocess.run(['gpasswd', '-d', user, 'adm'])
-            subprocess.run(['gpasswd', '-d', user, 'sudo'])
+            subprocess.run(['gpasswd', '-d', user, 'adm'], stdout = subprocess.DEVNULL)
+            subprocess.run(['gpasswd', '-d', user, 'sudo'], stdout = subprocess.DEVNULL)
             logger.logChange(f"Removed admin privileges from {user}")
         if user in admins:
             # Add admin to adm and sudo groups
-            subprocess.run(['gpasswd', '-a', user, 'adm'])
-            subprocess.run(['gpasswd', '-a', user, 'sudo'])
-            logger.logChange(f"Granted admin privileges to {admin}")
+            subprocess.run(['gpasswd', '-a', user, 'adm'], stdout = subprocess.DEVNULL)
+            subprocess.run(['gpasswd', '-a', user, 'sudo'], stdout = subprocess.DEVNULL)
+            logger.logChange(f"Granted admin privileges to {user}")
     logger.logHEnd()
 
     # Change to secure password
