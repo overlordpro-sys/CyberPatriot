@@ -4,17 +4,24 @@ class Logger:
         self.log_file = open(filename, 'a')
 
     def logH1(self, message):
-        self.log_file.write(f"XX---- {message.upper()} ----XX\n")
+        log = f"XX---- {message.upper()} ----XX\n"
+        self.log_file.write(log)
+        print(log)
 
     def logH2(self, message):
-        self.log_file.write(f"------ {message} ------\n")
+        log = f"------ {message} ------\n"
+        self.log_file.write(log)
+        print(log)
 
     def logChange(self, message):
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        self.log_file.write(f"{timestamp} - {message}\n")
+        log = f"{timestamp} - {message}\n"
+        self.log_file.write(log)
+        print(log)
 
     def logHEnd(self):
         self.log_file.write("\n")
+        print("\n")
 
     def close(self):
         self.log_file.close()
