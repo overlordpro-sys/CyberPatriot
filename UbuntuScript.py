@@ -572,53 +572,6 @@ def main():
         if "#already run" not in fstab.read():
             fstab.write("#already run\nnone     /run/shm     tmpfs     rw,noexec,nosuid,nodev     0     0")
 
-    # remove bad programs
-    package_arr = {"john": "john john-data", "telnetd": "openbsd-inetd telnetd", "logkeys": "logkeys",
-                   "hydra": "hydra-gtk hydra", "fakeroot": "fakeroot",
-                   "nmap": "nmap zenmap", "crack": "crack crack-common", "medusa": "libssh2-1 medusa", "nikto": "nikto",
-                   "tightvnc": "xtightvncviewer", "bind9": "bind9 bind9utils",
-                   "avahi": "avahi-autoipd avahi-daemon avahi-utils",
-                   "cups": "cups cups-core-drivers printer-driver-hpcups indicator-printers printer-driver-splix "
-                           "hplip printer-driver-gutenprint bluez-cups printer-driver-postscript-hp cups-server-common "
-                           "cups-browsed cups-bsd cups-client cups-common cups-daemon cups-ppdc cups-filters "
-                           "cups-filters-core-drivers printer-driver-pxljr printer-driver-foo2zjs foomatic-filters "
-                           "cups-pk-helper",
-                   "postfix": "postfix", "nginx": "nginx nginx-core nginx-common", "frostwire": "frostwire",
-                   "vuze": "azureus vuze",
-                   "samba": "samba samba-common samba-common-bin", "apache2": "apache2 apache2.2-bin", "ftp": "ftp",
-                   "vsftpd": "vsftpd", "netcat": "netcat-traditional netcat-openbsd",
-                   "openssh": "openssh-server openssh-client ssh",
-                   "weplab": "weplab", "pyrit": "pyrit", "mysql": "mysql-server php5-mysql", "php5": "php5",
-                   "proftpd-basic": "proftpd-basic", "filezilla": "filezilla",
-                   "postgresql": "postgresql", "irssi": "irssi",
-                   "wireshark": "wireshark wireshark-common wireshark-qt wireshark-gtk libwireshark-data libwireshark13",
-                   "libpcap": "libpcap-dev libpcap0.8 libpcap0.8-dev libpcap0.9 libpcap0.9-dev",
-                   "metasploit": "metasploit-framework",
-                   "dirb": "dirb", "aircrack-ng": "aircrack-ng",
-                   "sqpmap": "sqpmap", "wifite": "wifite wifite-gui wifite-cli",
-                   "autopsy": "autopsy autopsy-gui autopsy-cli",
-                   "setoolkit": "setoolkit", "ncrack": "ncrack", "nmap-ncat": "nmap-ncat",
-                   "skipfish": "skipfish", "maltego": "maltego", "maltegoce": "maltegoce",
-                   "nessus": "nessus nessus-cli nessus-server",
-                   "beef": "beef beef-xss beef-xss-ruby beef-xss-python",
-                   "apktool": "apktool", "snort": "snort", "suricata": "suricata",
-                   "yersinia": "yersinia", "freeciv": "freeciv", "oph-crack": "oph-crack", "kismet": "kismet",
-                   "minetest": "minetest", "isc-dhcp-server": "isc-dhcp-server", "dhcp3-server": "dhcp3-server",
-                   "slapd": "slapd", "nfs-kernel-server": "nfs-kernel-server", "dovecot-imapd": "dovecot-imapd",
-                   "dovecot-pop3d": "dovecot-pop3d", "dovecot-common": "dovecot-common", "squid": "squid",
-                   "snmp": "snmp", "nis": "nis", "rsh-client": "rsh-client", "talk": "talk", "telnet": "telnet",
-                   "ldap-utils": "ldap-utils", "rpcbind": "rpcbind"}
-
-    subprocess.call("dpkg-query -f '${binary:Package}\n' -W > packages_list.txt", shell=True)
-    with open("packages_list.txt", "r") as packages_list:
-        for installed_package in packages_list:
-            for arr_list in package_arr.values():
-                if installed_package.strip() in arr_list:
-                    if ask("Remove " + installed_package + "?"):
-                        subprocess.call("apt purge " + arr_list + " -y", shell=True)
-                        subprocess.call("dpkg-query -f '${binary:Package}\n' -W > packages_list.txt", shell=True)
-                        print("Removed " + installed_package)
-
     # with open('logs/sus_files.log', 'w') as suspicious_files:
     #     output = subprocess.check_output("timeout 60 find / -nouser -o -nogroup", shell=True, text=True)
     #     output += subprocess.check_output("timeout 60 find / -perm -2 ! -type l -ls", shell=True, text=True)
