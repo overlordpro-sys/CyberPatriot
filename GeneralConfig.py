@@ -24,9 +24,9 @@ def general_config(logger: Logger):
     # lightdm stuff
     if os.path.isfile("/etc/lightdm/lightdm.conf"):
         with open("/etc/lightdm/lightdm.conf", "a") as file:
-            file.write("autologin-guest=false")
-            file.write("allow-guest=false")
-            file.write("greeter-hide-users=true")
+            file.write("autologin-guest=false\n")
+            file.write("allow-guest=false\n")
+            file.write("greeter-hide-users=true\n")
         logger.logChange("Secured lightdm")
 
     logger.logHEnd()
