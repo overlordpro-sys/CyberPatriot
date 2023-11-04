@@ -21,4 +21,17 @@ def general_config(logger: Logger):
     subprocess.call("usermod -L guest", shell=True)
     logger.logChange("Disabled guest account")
 
+    # lightdm stuff
+    if os.path.isfile("/etc/lightdm/lightdm.conf"):
+        with open("/etc/lightdm/lightdm.conf", "a") as file:
+            file.write("autologin-guest=false")
+            file.write("allow-guest=false")
+            file.write("greeter-hide-users=true")
+        logger.logChange("Secured lightdm")
+
     logger.logHEnd()
+
+
+if __name__ == "__main__":
+    log = Logger('logs/log.txt')
+    general_config(log)

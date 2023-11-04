@@ -221,13 +221,6 @@ def main():
     # scans = Process(target=scans)
     # scans.start()
 
-    # lightdm stuff
-    if os.path.isfile("/etc/lightdm/lightdm.conf"):
-        with open("/etc/lightdm/lightdm.conf", "a") as file:
-            file.write("autologin-guest=false")
-            file.write("allow-guest=false")
-            file.write("greeter-hide-users=true")
-
     # lock root account
     # subprocess.call("passwd -l root", shell=True)
 
