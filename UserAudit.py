@@ -84,6 +84,8 @@ def user_audit(user_path, admin_path, logger: Logger):
                     temp_file.write(line)
 
             temp_filename = temp_file.name
+            os.chmod(temp_filename, 0o644)
+            os.chown(temp_filename, 0, 0)
         # Rename the temporary file to replace the original /etc/passwd
         os.rename(temp_filename, '/etc/passwd')
     logger.logHEnd()
