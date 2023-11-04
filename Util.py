@@ -16,3 +16,17 @@ def replace_line(file_path, to_replace, replace_with):
     with open(file_path, 'w') as f:
         for line in lines:
             f.write(line.replace(to_replace, replace_with))
+
+
+def backup_then_clean_file(abs_path, file_name):
+    dest_stat = os.stat(abs_path)
+    dest_perms = dest_stat.st_mode
+    dest_uid = dest_stat.st_uid
+    dest_gid = dest_stat.st_gid
+
+    shutil.copy(abs_path, f"backups/{file_name}")
+    shutil.copy(f"clean_files/{file_name}", abs_path)
+
+    os.chmod(abs_path, dest_perms)
+    os.chown(abs_path, dest_uid, dest_gid)
+    logger.logChange(f"Clean {file_name}")
