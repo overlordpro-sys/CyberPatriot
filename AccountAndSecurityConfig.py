@@ -1,6 +1,5 @@
-import shutil
-from Util import backup_then_clean_file
 from LoggerClass import Logger
+from Util import backup_then_clean_file
 
 
 def password_config(logger: Logger):

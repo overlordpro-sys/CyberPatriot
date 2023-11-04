@@ -1,3 +1,7 @@
+import os
+import shutil
+
+
 # confirm yes or no with user before doing something
 def ask(question):
     reply = str(input(question + ' (y/n): ')).lower().strip()
@@ -29,4 +33,3 @@ def backup_then_clean_file(abs_path, file_name):
 
     os.chmod(abs_path, dest_perms)
     os.chown(abs_path, dest_uid, dest_gid)
-    logger.logChange(f"Clean {file_name}")

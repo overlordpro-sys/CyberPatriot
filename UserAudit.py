@@ -1,8 +1,10 @@
 import os
+import pwd
 import subprocess
 import tempfile
-import pwd
+
 from LoggerClass import Logger
+
 
 def is_user_in_group(user, group):
     result = subprocess.run(['getent', 'group', group], capture_output=True, text=True)
@@ -12,6 +14,7 @@ def is_user_in_group(user, group):
         return user in users_in_group.split(',')
     else:
         return False
+
 
 def user_audit(user_path, admin_path, logger: Logger):
     logger.logH1("USER AUDITING")
@@ -65,8 +68,6 @@ def user_audit(user_path, admin_path, logger: Logger):
             continue
 
     logger.logHEnd()
-
-
 
     # Find unauthorized users and comment out their lines in /etc/passwd
     logger.logH2("Removing unauthorized users...")
