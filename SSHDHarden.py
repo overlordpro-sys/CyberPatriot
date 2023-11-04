@@ -10,4 +10,5 @@ def sshd_harden():
 
 
 if __name__ == "__main__":
+    logger = Logger('logs/log.txt')
     sshd_harden()
