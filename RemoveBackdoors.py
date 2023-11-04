@@ -19,11 +19,11 @@ def remove_backdoors(logger: Logger):
             subprocess.call("rm " + exe, shell=True)
             subprocess.call("kill -9 " + pid, shell=True)
             logger.logChange(f"Removed and backed up {name} - {exe}")
+    logger.logHEnd()
 
     logger.logH2("Remove cronjobs")
     for file in os.listdir("/etc/cron.d"):
         if file != "README":
             subprocess.call("mv /etc/cron.d/" + file + " backups/crontab/" + file, shell=True)
             logger.logChange(f"Moved {file} cronjob")
-
     logger.logHEnd()
