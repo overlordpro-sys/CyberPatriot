@@ -4,9 +4,13 @@ import subprocess
 import sys
 from configparser import ConfigParser
 from multiprocessing import Process
+
+from AccountAndSecurityConfig import password_config
+from GeneralConfig import general_config
 from LoggerClass import Logger
-import psutil
-import tempfile
+from RemoveBackdoors import remove_backdoors
+from RemoveProhibitedSoftware import remove_prohibited
+from UserAudit import user_audit
 
 
 # confirm yes or no with user before doing something
@@ -77,7 +81,7 @@ def scans():
         scanlog.write(scanOutput)
 
 
-def initDirectories():
+def init_directories():
     # create directories and copy log files to log directory
     if not os.path.exists("logs"):
         os.mkdir("logs")
@@ -95,262 +99,6 @@ def initDirectories():
         os.mkdir("backups/hosts")
 
 
-def userAudit(user_path, admin_path, logger: Logger):
-    logger.logH1("USER AUDITING")
-    # Initialize paths
-    with open(user_path, 'r') as file:
-        users = set(file.read().splitlines())
-        users.add('nobody')
-    with open(admin_path, 'r') as file:
-        lines = file.read().splitlines()
-        admins = set(lines)
-        sudo_user = lines[0]
-    with open('/etc/passwd', 'r') as file:
-        passwd_lines = file.readlines()
-
-    # Filter out system users and collect information about users, incluide us
-    system_users = set()
-    normal_users = set()
-    for line in passwd_lines:
-        if not line.startswith('#'):
-            username = line.split(':')[0]
-            if int(line.split(':')[2]) >= 1000 or (int(line.split(':')[2]) == 0 and username == 'root'):
-                normal_users.add(username)
-            else:
-                system_users.add(username)
-
-    # Find unauthorized users and comment out their lines in /etc/passwd
-    logger.logH2("Removing unauthorized users...")
-    unauthorized_users = normal_users - users - admins
-    if unauthorized_users:
-        # Create a temporary file
-        with tempfile.NamedTemporaryFile(mode='w', delete=False) as temp_file:
-            for line in passwd_lines:
-                username = line.split(':')[0]
-                if username in unauthorized_users:
-                    temp_file.write('#' + line)
-                    normal_users.remove(username)
-                    logger.logChange(f"Disabled unauthorized user: {username}")
-                else:
-                    temp_file.write(line)
-
-            temp_filename = temp_file.name
-        # Rename the temporary file to replace the original /etc/passwd
-        os.rename(temp_filename, '/etc/passwd')
-    logger.logHEnd()
-
-    # Audit admin permissions
-    # NOT WORKING, PASSWORD DOESNT CHANGE
-    logger.logH2("Checking user permissions...")
-    for user in normal_users:
-        if user in users:
-            # Remove user from adm and sudo groups
-            subprocess.run(['gpasswd', '-d', user, 'adm'], stdout = subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.run(['gpasswd', '-d', user, 'sudo'], stdout = subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            logger.logChange(f"Removed admin privileges from {user}")
-        if user in admins:
-            # Add admin to adm and sudo groups
-            subprocess.run(['gpasswd', '-a', user, 'adm'], stdout = subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.run(['gpasswd', '-a', user, 'sudo'], stdout = subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            logger.logChange(f"Granted admin privileges to {user}")
-    logger.logHEnd()
-
-    # Change to secure password
-    logger.logH2("Changing passwords...")
-    password = 'Cyb3rPatri0t!'
-    all_users = users.union(admins)
-    all_users.remove('nobody')
-    all_users.remove(sudo_user)
-    for user in all_users:
-        user_password_pair = f"{user}:{password}"
-        result = subprocess.run(
-            ['chpasswd'],
-            input=user_password_pair.encode(),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-        )
-        if result.returncode == 0:
-            logger.logChange(f"Password changed for {user}")
-        else:
-            logger.logChange(f"Failed to change password for {user}. Error: {result.stderr.decode()}")
-    logger.logHEnd()
-
-
-def removeProhibited(logger: Logger):
-    logger.logH1("REMOVING PROHIBITED SOFTWARE")
-
-    def check_software_installed(pkg):
-        try:
-            subprocess.run(["dpkg", "-l", pkg], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            return True
-        except subprocess.CalledProcessError:
-            return False
-
-    def purge_software(pkgs):
-        try:
-            subprocess.run(["sudo", "apt-get", "purge", "-y"] + pkgs, check=True)
-            logger.logChange(f"Packages {' '.join(pkgs)} have been purged from the system.")
-        except subprocess.CalledProcessError as e:
-            logger.logChange(f"An error occurred while trying to remove packages {' '.join(pkgs)}: {e}")
-
-    package_arr = {
-        "john": ["john", "john-data"],
-        "telnetd": ["openbsd-inetd", "telnetd"],
-        "logkeys": ["logkeys"],
-        "hydra": ["hydra-gtk", "hydra"],
-        "fakeroot": ["fakeroot"],
-        "nmap": ["nmap", "zenmap"],
-        "crack": ["crack", "crack-common"],
-        "medusa": ["libssh2-1", "medusa"],
-        "nikto": ["nikto"],
-        "tightvnc": ["xtightvncviewer"],
-        "bind9": ["bind9", "bind9utils"],
-        "avahi": ["avahi-autoipd", "avahi-daemon", "avahi-utils"],
-        "cups": ["cups", "cups-core-drivers", "printer-driver-hpcups", "indicator-printers", "printer-driver-splix",
-                 "hplip", "printer-driver-gutenprint", "bluez-cups", "printer-driver-postscript-hp",
-                 "cups-server-common",
-                 "cups-browsed", "cups-bsd", "cups-client", "cups-common", "cups-daemon", "cups-ppdc", "cups-filters",
-                 "cups-filters-core-drivers", "printer-driver-pxljr", "printer-driver-foo2zjs", "foomatic-filters",
-                 "cups-pk-helper"],
-        "postfix": ["postfix"],
-        "nginx": ["nginx", "nginx-core", "nginx-common"],
-        "frostwire": ["frostwire"],
-        "vuze": ["azureus", "vuze"],
-        "samba": ["samba", "samba-common", "samba-common-bin"],
-        "apache2": ["apache2", "apache2.2-bin"],
-        "ftp": ["ftp"],
-        "vsftpd": ["vsftpd"],
-        "netcat": ["netcat-traditional", "netcat-openbsd"],
-        "openssh": ["openssh-server", "openssh-client", "ssh"],
-        "weplab": ["weplab"],
-        "pyrit": ["pyrit"],
-        "mysql": ["mysql-server", "php5-mysql"],
-        "php5": ["php5"],
-        "proftpd-basic": ["proftpd-basic"],
-        "filezilla": ["filezilla"],
-        "postgresql": ["postgresql"],
-        "irssi": ["irssi"],
-        "wireshark": ["wireshark", "wireshark-common", "wireshark-qt", "wireshark-gtk", "libwireshark-data",
-                      "libwireshark13"],
-        "libpcap": ["libpcap-dev", "libpcap0.8", "libpcap0.8-dev", "libpcap0.9", "libpcap0.9-dev"],
-        "metasploit": ["metasploit-framework"],
-        "dirb": ["dirb"],
-        "aircrack-ng": ["aircrack-ng"],
-        "sqlmap": ["sqlmap"],
-        "wifite": ["wifite"],
-        "autopsy": ["autopsy"],
-        "setoolkit": ["setoolkit"],
-        "ncrack": ["ncrack"],
-        "nmap-ncat": ["nmap-ncat"],
-        "skipfish": ["skipfish"],
-        "maltego": ["maltego"],
-        "maltegoce": ["maltegoce"],
-        "nessus": ["nessus"],
-        "beef": ["beef"],
-        "apktool": ["apktool"],
-        "snort": ["snort"],
-        "suricata": ["suricata"],
-        "yersinia": ["yersinia"],
-        "freeciv": ["freeciv"],
-        "oph-crack": ["ophcrack"],
-        "kismet": ["kismet"],
-        "minetest": ["minetest"],
-        "isc-dhcp-server": ["isc-dhcp-server"],
-        "dhcp3-server": ["dhcp3-server"],
-        "slapd": ["slapd"],
-        "nfs-kernel-server": ["nfs-kernel-server"],
-        "dovecot-imapd": ["dovecot-imapd"],
-        "dovecot-pop3d": ["dovecot-pop3d"],
-        "dovecot-common": ["dovecot-common"],
-        "squid": ["squid"],
-        "snmp": ["snmp"],
-        "nis": ["nis"],
-        "rsh-client": ["rsh-client"],
-        "talk": ["talk"],
-        "telnet": ["telnet"],
-        "ldap-utils": ["ldap-utils"],
-        "rpcbind": ["rpcbind"],
-        "rsync": ["rsync", "backuppc-rsync"]
-    }
-
-    for software_name, packages in package_arr.items():
-        packages_to_remove = []
-        for package in packages:
-            if check_software_installed(package):
-                packages_to_remove.append(package)
-
-        if packages_to_remove:
-            logger.logChange(
-                f"The following packages related to {software_name} are installed: {', '.join(packages_to_remove)}")
-            if ask(f"Do you want to remove {software_name}?"):
-                purge_software(packages_to_remove)
-        else:
-            logger.logChange(f"No packages related to {software_name} are installed.")
-    logger.logHEnd()
-
-
-def generalConfig(logger: Logger):
-    logger.logH1("GENERAL CONFIG")
-    # sysctl hardening
-    shutil.copy("/etc/sysctl.conf", "backups/sysctl.conf")
-    shutil.copy("clean_files/sysctl.conf", "/etc/sysctl.conf")
-    logger.logChange("Clean sysctl.config")
-
-    # enable tcp syn cookies
-    shutil.copy("/etc/sysctl.d/10-network-security.conf", "backups/10-network-security.conf")
-    shutil.copy("clean_files/10-network-security.conf", "/etc/sysctl.d/10-network-security.conf")
-    subprocess.call("sysctl --system", shell=True)
-    logger.logChange("Clean 10-network-security.conf")
-
-    # disable guest account
-    subprocess.call("usermod -L guest", shell=True)
-    logger.logChange("Disabled guest account")
-
-    # disable ipv4 redirects
-    subprocess.call("/sbin/sysctl -w net.ipv4.conf.all.send_redirects=0", shell=True)
-    logger.logChange("Disabled ipv4 redirect")
-
-    # disable ip forwarding
-    subprocess.call("/sbin/sysctl -w net.ipv4.ip_forward=0", shell=True)
-    subprocess.call("/sbin/sysctl -w net.ipv6.conf.all.forwarding=0", shell=True)
-    logger.logChange("Disable ipv4 forwarding")
-
-    logger.logHEnd()
-
-def removeBackdoors(logger: Logger):
-    logger.logH1("BACKDOORS")
-
-    logger.logH2("Remove netcat backdoors")
-    for proc in psutil.process_iter(['name', 'pid', 'exe']):
-        if proc.name() == "nc" or proc.name() == "netcat" or proc.name() == "ncat":
-            name = proc.info['name']
-            pid = str(proc.info['pid'])
-            exe = proc.info['exe']
-            subprocess.call(str("cp " + exe + " backups/" + exe.rsplit('/')[-1]), shell=True)
-            subprocess.call("rm " + exe, shell=True)
-            subprocess.call("kill -9 " + pid, shell=True)
-            logger.logChange(f"Removed and backed up {name} - {exe}")
-
-    logger.logH2("Remove cronjobs")
-    for file in os.listdir("/etc/cron.d"):
-        if file != "README":
-            subprocess.call("mv /etc/cron.d/" + file + " backups/crontab/" + file, shell=True)
-            logger.logChange(f"Moved {file} cronjob")
-
-    logger.logHEnd()
-
-
-
-def passwordConfig(logger: Logger):
-    logger.logH1("PASSWORD CONFIG")
-
-    logger.logH2("Login Defs")
-    shutil.copy("/etc/login.defs", "backups/passconfig/login.defs")
-    shutil.copy("clean_files/login.defs", "/etc/login.defs")
-
-    logger.logHEnd()
-
-
 def test():
     if os.geteuid() != 0:
         sys.exit("This script must be run as root")
@@ -361,14 +109,14 @@ def test():
     if not (os.path.isfile("users.txt") and os.path.isfile("admins.txt")):
         print("users.txt and admins.txt not found")
         sys.exit()
-    initDirectories()
+    init_directories()
     logger = Logger('logs/log.txt')
-    userAudit('users.txt', 'admins.txt', logger)
+    user_audit('users.txt', 'admins.txt', logger)
 
-    generalConfig(logger)
-    removeProhibited(logger)
-    passwordConfig(logger)
-    removeBackdoors(logger)
+    general_config(logger)
+    remove_prohibited(logger)
+    password_config(logger)
+    remove_backdoors(logger)
 
 
 def main():
