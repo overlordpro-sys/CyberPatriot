@@ -32,7 +32,7 @@ def user_audit(user_path, admin_path, logger: Logger):
     for line in passwd_lines:
         if not line.startswith('#'):
             username = line.split(':')[0]
-            if int(line.split(':')[2]) >= 1000 or (int(line.split(':')[2]) == 0 and username == 'root'):
+            if int(line.split(':')[2]) >= 1000:
                 normal_users.add(username)
             else:
                 system_users.add(username)
@@ -118,6 +118,7 @@ def user_audit(user_path, admin_path, logger: Logger):
     logger.logH2("Changing passwords...")
     password = 'Cyb3rPatri0t!'
     all_users = users.union(admins)
+    all_users.add('root')
     all_users.remove('nobody')
     all_users.remove(sudo_user)
     for user in all_users:
