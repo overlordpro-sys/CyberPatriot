@@ -1,7 +1,7 @@
 import subprocess
 
 from LoggerClass import Logger
-from UbuntuScript import ask
+from Util import ask
 
 
 def remove_prohibited(logger: Logger):
