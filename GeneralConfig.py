@@ -21,13 +21,6 @@ def general_config(logger: Logger):
     subprocess.call("usermod -L guest", shell=True)
     logger.logChange("Disabled guest account")
 
-    # disable ipv4 redirects
-    subprocess.call("/sbin/sysctl -w net.ipv4.conf.all.send_redirects=0", shell=True)
     logger.logChange("Disabled ipv4 redirect")
-
-    # disable ip forwarding
-    subprocess.call("/sbin/sysctl -w net.ipv4.ip_forward=0", shell=True)
-    subprocess.call("/sbin/sysctl -w net.ipv6.conf.all.forwarding=0", shell=True)
-    logger.logChange("Disable ipv4 forwarding")
 
     logger.logHEnd()
