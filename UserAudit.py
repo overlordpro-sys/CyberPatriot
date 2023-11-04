@@ -36,7 +36,8 @@ def user_audit(user_path, admin_path, logger: Logger):
                 normal_users.add(username)
             else:
                 system_users.add(username)
-
+    normal_users.remove('nobody')
+    system_users.add('nobody')
     # Check user home directories and shells
     for user in normal_users:
         try:
