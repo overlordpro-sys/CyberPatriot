@@ -98,7 +98,8 @@ def remove_prohibited(logger: Logger):
         "telnet": ["telnet"],
         "ldap-utils": ["ldap-utils"],
         "rpcbind": ["rpcbind"],
-        "rsync": ["rsync", "backuppc-rsync"]
+        "rsync": ["rsync", "backuppc-rsync"],
+        "deluge": ["deluge-common", "deluge-gtk"]
     }
 
     for software_name, packages in package_arr.items():
